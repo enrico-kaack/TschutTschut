@@ -1,0 +1,228 @@
+<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/0.3.24/peerjs.min.js"></script>
+
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>SyncFiddle</title>
+  <style>
+    body {
+      font-family: "Helvetica Neue", Helvetica, sans-serif;
+    }
+
+
+  </style>
+</head>
+<body style="overflow:hidden; color: #fff; background-color: #000;">
+  <div>
+    <div id="myId" style="display: inline-block; ">Connecting...</div><button id="copy" style="display: none; margin-left: 4px; " onclick="copyToClipboard()">Copy</button><br />
+
+  <input id="inPeerOutgoing" placeholder="peer on your left" type="text"/>
+    <button id="btnConnect">Connect</button>
+    <img style="display: none; vertical-align: middle; margin-left: 4px; width: 16px; height: 16px; " id="connect.success" src="https://cdn3.iconfinder.com/data/icons/flat-actions-icons-9/512/Tick_Mark-256.png">
+    <img style="display: none; vertical-align: middle; margin-left: 4px; width: 16px; height: 16px; " id="connect.error" src="https://cdn3.iconfinder.com/data/icons/flat-actions-icons-9/792/Close_Icon-256.png">
+  <br/>
+  <button id="btnStart">Start train!</button>
+  </div>
+
+	<pre id="train" style="position: absolute; right: -1000px; bottom: 0px; min-width: 600px;"></pre>
+  <script>
+    var copyToClipboard;
+    
+    (() => {
+      // See the console window at bottom.
+      var trainKeyFrames = [
+				"                                      (@@@)            \n" +
+				"                                        (@@@@@@@)                 \n" +
+				"                                                  (@@@@@@@@@@@)\n" +
+				"                    (@@@)                                           \n" +
+				"                           (@@@@@@)                   \n" +
+				"                                   (@@)\n" +
+				"        (@@)                   \n" +
+				"       .-.               \n" +
+				"       ] [    .-.      _    .-----.\n" +
+				"     .\"   \"\"\"\"   \"\"\"\"\"\" \"\"\"\"| .--`\n" +
+				"    (:--:--:--:--:--:--:--:-| [___    .------------------------.\n" +
+				"     |C&O  :  :  :  :  :  : [_9_] |'='|.----------------------.|\n" +
+				"    /|.___________________________|___|'--.___.--.___.--.___.-'| \n" +
+				"   / ||_.--.______.--.______.--._ |---\\'--\\-.-/==\\-.-/==\\-.-/-'/--\n" +
+				"  /__;^=(‾‾)‾‾‾‾‾‾(‾‾)‾‾‾‾‾‾(‾‾)=^~^^^ ^^^^(-)^^^^(-)^^^^(-)^^^ jgs\n" +
+				"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+        "                                                (@@@@@)\n" +
+        "                                                         (@@@@@@@)\n" +
+        "                         (@@@@@@@)                             \n" +
+        "                              (@@@@@@@)                        (@@@)\n" +
+        "                                                     \n" +
+        "           (@@@)                       \n" +
+        "                          (@@@)\n" +
+        "       .-.               \n" +
+        "       ] [    .-.      _    .-----.\n" +
+        "     .\"   \"\"\"\"   \"\"\"\"\"\" \"\"\"\"| .--`\n" +
+        "    (:--:--:--:--:--:--:--:-| [___    .------------------------.\n" +
+        "     |C&O  :  :  :  :  :  : [_9_] |'='|.----------------------.|\n" +
+        "    /|.___________________________|___|'--.___.--.___.--.___.-'| \n" +
+        "   / ||_.--.______.--.______.--._ |---\\'--\\-.-/==\\-.-/==\\-.-/-'/--\n" +
+        "  /__;^=(--)------(--)------(--)=^~^^^ ^^^^(-)^^^^(-)^^^^(-)^^^ jgs\n" +
+        "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+        "                               (@@)                              \n" +
+				"                                     (@@@@@)                    \n" +
+				"                                          (@@@@@@)                  \n" +
+				"               (@@@@@@)                            (@)\n" +
+				"                  (@@@@)               \n" +
+				"                          (@@@)\n" +
+				"       .-.               \n" +
+				"       ] [    .-.      _    .-----.\n" +
+				"     .\"   \"\"\"\"   \"\"\"\"\"\" \"\"\"\"| .--`\n" +
+				"    (:--:--:--:--:--:--:--:-| [___    .------------------------.\n" +
+				"     |C&O  :  :  :  :  :  : [_9_] |'='|.----------------------.|\n" +
+				"    /|.___________________________|___|'--.___.--.___.--.___.-'| \n" +
+				"   / ||_.--.______.--.______.--._ |---\\'--\\-.-/==\\-.-/==\\-.-/-'/--\n" +
+				"  /__;^=(__)______(__)______(__)=^~^^^ ^^^^(-)^^^^(-)^^^^(-)^^^ jgs    \n" +
+				"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"];
+      
+      var MESSAGE_START_TRAIN = 'train.start';
+      var OFFSET_INCREMENT = 10;
+      var ANIMATION_INTERVAL = 50;
+      var peer = new Peer();
+      var connIn, connOut;
+      var trainElement = document.getElementById("train");
+      var copyElement = document.getElementById('copy');
+      var connectSuccessElement = document.getElementById('connect.success');
+      var connectErrorElement = document.getElementById('connect.error');
+      var keyframeElements = [document.getElementById("train1"), document.getElementById("train2"), document.getElementById("train3")];
+      var keyframeCounter = 0;
+      var trainSignalled;
+      
+      peer.on('error', (error) => {
+        if(error.type == 'peer-unavailable') {
+          connectSuccessElement.style.display = 'none';
+        	connectErrorElement.style.display = 'inline';
+        }
+      });
+
+      function startTrain() {
+        if(interval) {
+          console.errror('Animation still running.');
+          return;
+        }
+
+        var trainStartX = -trainElement.getBoundingClientRect().width;
+        var offsetX = 0;
+        var clientWidth = Math.min(document.body.clientWidth, window.innerWidth);
+
+        trainSignalled = false;
+        keyframeCounter = 0;
+
+        var interval = setInterval(function() {
+          offsetX += OFFSET_INCREMENT;
+          var trainPositionX = trainStartX + offsetX;
+          drawTrain(trainPositionX);
+
+          if (trainPositionX > clientWidth) {
+            console.log("Ending animation.");
+            clearInterval(interval);
+            interval = null;
+          } else if (offsetX > clientWidth) {
+            console.log("Starting next train.");
+            signalNextTrainStart();
+          }
+        }, ANIMATION_INTERVAL);
+      }
+
+      function drawTrain(xCoord) {
+        trainElement.style.right = xCoord;
+        drawKeyFrameContent();
+      }
+
+      function drawKeyFrameContent() {
+        var previousKeyFrameIndex = Math.max((keyframeCounter - 1) % trainKeyFrames.length, 0);
+        var currentKeyFrameIndex = keyframeCounter % trainKeyFrames.length;
+
+        trainElement.textContent = trainKeyFrames[previousKeyFrameIndex];
+
+        keyframeCounter++;
+      }
+
+      document.getElementById("btnStart").addEventListener("click", function(){
+        startTrain();
+      });
+
+      document.getElementById("btnConnect").addEventListener("click", function(){
+        var targetId = document.getElementById("inPeerOutgoing").value;
+        connect(targetId);
+      });
+
+      peer.on('open', function(id) {
+        console.log(id);
+        document.getElementById('myId').innerHTML = 'Your ID: ' + id;
+        copyToClipboard = copyToClipboardRaw.bind(null, id);
+        copyElement.style.display = 'inline';
+      });
+
+      function receive() {
+        peer.on('connection', function(conn) {
+          conn.on('data', function(data) {
+            if(data == MESSAGE_START_TRAIN) {
+              startTrain();
+            } else console.log('I am being spammed: ', data);
+          });
+        });
+      }
+
+      function connect(id) {
+        if(!connOut) {
+          connOut = peer.connect(id);
+          connOut.on('open', function(){
+            console.log('Remote client connected: ', id);
+            connectErrorElement.style.display = 'none';
+            connectSuccessElement.style.display = 'inline';
+          });
+          connOut.on('error)', () => {
+            connectSuccessElement.style.display = 'none';
+            connectErrorElement.style.display = 'inline';
+          });
+          connOut.on('close', () => {
+            connectSuccessElement.style.display = 'none';
+            connectErrorElement.style.display = 'inline';
+          });
+        } else closeAndConnect(id);
+      }
+
+      function closeAndConnect(id) {
+        connOut.on('close', () => {
+            connOut = null;
+            console.log('Remote client disconnected: ', id);
+            connect(id);
+          });
+        connOut.close();
+      }
+
+      function signalNextTrainStart() {
+        if(!connOut) {
+          console.warn('No remote client connected.');
+          return;
+        }
+        if(!trainSignalled) {
+          trainSignalled = true;
+          connOut.send(MESSAGE_START_TRAIN);
+        }
+      }
+      
+      function copyToClipboardRaw(str) {
+        const el = document.createElement('textarea');
+        el.value = str;
+        el.setAttribute('readonly', '');
+        el.style.position = 'absolute';
+        el.style.left = '-9999px';
+        document.body.appendChild(el);
+        el.select();
+        document.execCommand('copy');
+        document.body.removeChild(el);
+      }
+
+      receive();
+    })();
+  </script>
+</body>
+</html>
