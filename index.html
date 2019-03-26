@@ -1,6 +1,5 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/0.3.24/peerjs.min.js"></script>
 
-
 <!DOCTYPE html>
 <html>
 <head>
@@ -22,14 +21,22 @@
 <body style="overflow:hidden; color: #fff; background-color: #000;">
   <div>
     <div id="myId" style="display: inline-block; ">Connecting...</div><button id="copy" style="display: none; margin-left: 4px; " onclick="copyToClipboard()">Copy</button><br />
+    </div>
+    <button id="btnBecomeMaster">Become Master</button>
+    <div>
+    <div id="slaveList">
+    Not master
+    </div>
+    <button id="btnConnectAllPeers" style="display: none;">Connect all Peers</button>
 
+    </div>
   <input id="inPeerOutgoing" placeholder="peer on your left" type="text"/>
     <button id="btnConnect">Connect</button>
     <img style="display: none; vertical-align: middle; margin-left: 4px; width: 16px; height: 16px; " id="connect.success" src="https://cdn3.iconfinder.com/data/icons/flat-actions-icons-9/512/Tick_Mark-256.png">
     <img style="display: none; vertical-align: middle; margin-left: 4px; width: 16px; height: 16px; " id="connect.error" src="https://cdn3.iconfinder.com/data/icons/flat-actions-icons-9/792/Close_Icon-256.png">
   <br/>
   <button id="btnStart">Start train!</button>
-  </div>
+
 
   <div id="track"></div>
   <script type="text/javascript">
@@ -90,9 +97,10 @@
       var MESSAGE_START_TRAIN = 'train.start';
       var OFFSET_INCREMENT = 10;
       var ANIMATION_INTERVAL = 50;
-      var peer = new Peer();
+      var peer = new Peer({debug: true});
       var connIn, connOut;
       var copyElement = document.getElementById('copy');
+      
       var connectSuccessElement = document.getElementById('connect.success');
       var connectErrorElement = document.getElementById('connect.error');
       var trackElement = document.getElementById('track');
@@ -172,6 +180,10 @@
         var targetId = document.getElementById("inPeerOutgoing").value;
         connect(targetId);
       });
+
+      document.getElementById("btnBecomeMaster").addEventListener("click", becomeMaster);
+      document.getElementById("btnConnectAllPeers").addEventListener("click", sendConnectionCommands);
+
       
       document.onkeydown = function() {
           var key = event.keyCode || event.charCode;
@@ -257,6 +269,92 @@
         el.select();
         document.execCommand('copy');
         document.body.removeChild(el);
+      }
+
+
+      function connectToMaster(masterId) {
+          var connToMaster = peer.connect(masterId);
+          connToMaster.on('open', function(){
+            console.log('connected to master: ', masterId);
+            connToMaster.send({type: "SYN"})
+          });
+          connToMaster.on('error)', () => {
+            console.error("could not connect to master");
+          });
+          connToMaster.on('close', () => {
+
+          });
+          connToMaster.on('data', (data) =>{
+            if (data.type === "SYN") {
+              console.error("wrong command received");
+            } else if (data.type === "CON") {
+              console.log("Received connection command to", data.target);
+              connect(data.target);
+            }
+        });
+      }
+
+      var masterConnections = [];
+
+      function refreshSlaveList() {
+        console.log(masterConnections);
+        var listElement = document.getElementById("slaveList");
+        var inHtml = "";
+        masterConnections.forEach((item)=> {
+          inHtml += item.peer +"</br>";
+        })
+        listElement.innerHTML = inHtml;
+      }
+
+      function becomeMaster() {
+        //probably wait for on open
+        console.log("master", peer.id);
+        var masterUrl = window.location.href  + "?master=" + peer.id
+        document.getElementById('myId').innerHTML = masterUrl;
+        copyToClipboard = copyToClipboardRaw.bind(null, masterUrl);
+        copyElement.style.display = 'inline';
+        document.getElementById("btnConnectAllPeers").style.display = "block";
+        document.getElementById("slaveList").innerHTML = "Waiting for peers, let the one to your left open the url next";
+
+        //startup listening server
+        peer.on('connection', (conn) => {
+          console.log(conn.peer);
+        conn.on('data', (data) =>{
+          console.log(data);
+
+          if (data.type === "SYN") {
+            console.log("Slave connected", conn.peer)
+            masterConnections.push(conn);
+            refreshSlaveList();
+          } else if (data.type === "CON") {
+            console.log("Received connection command to", data.target);
+          }
+        });
+});
+      }
+
+      function sendConnectionCommands() {
+        console.log("sending connect command");
+        //create the ring topology
+        for (var i = 0; i < masterConnections.length - 1; i++) {
+          masterConnections[i].send({type: "CON", target: masterConnections[i+1].peer});
+          console.log("send", masterConnections[i], "to connect to ", masterConnections[i+1].peer);
+
+        }
+
+        //connect last with master
+        masterConnections[masterConnections.length -1].send({type: "CON", target: peer.id});
+
+        //connect first (master) with first one in list
+        connect(masterConnections[0].peer);
+      }
+
+      //starup check for masterId in url
+      var currentUrl = new URL(window.location.href);
+      console.log(currentUrl)
+      var masterId = currentUrl.searchParams.get("master");
+      if (masterId) {
+        connectToMaster(masterId);
       }
 
       receive();
