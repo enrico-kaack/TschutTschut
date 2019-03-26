@@ -11,7 +11,12 @@
       font-family: "Helvetica Neue", Helvetica, sans-serif;
     }
 
-
+  	pre.train {
+    	position: absolute;
+      right: -1000px;
+      bottom: 0px;
+      min-width: 600px;
+    }
   </style>
 </head>
 <body style="overflow:hidden; color: #fff; background-color: #000;">
@@ -26,13 +31,13 @@
   <button id="btnStart">Start train!</button>
   </div>
 
-	<pre id="train" style="position: absolute; right: -1000px; bottom: 0px; min-width: 600px;"></pre>
-  <script>
+  <div id="track"></div>
+  <script type="text/javascript">
     var copyToClipboard;
     
     (() => {
       // See the console window at bottom.
-      var trainKeyFrames = [
+      var keyFrames = [
 				"                                      (@@@)            \n" +
 				"                                        (@@@@@@@)                 \n" +
 				"                                                  (@@@@@@@@@@@)\n" +
@@ -81,18 +86,18 @@
 				"  /__;^=(__)______(__)______(__)=^~^^^ ^^^^(-)^^^^(-)^^^^(-)^^^ jgs    \n" +
 				"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"];
       
+      var KEY_DEL = 46;
       var MESSAGE_START_TRAIN = 'train.start';
       var OFFSET_INCREMENT = 10;
       var ANIMATION_INTERVAL = 50;
       var peer = new Peer();
       var connIn, connOut;
-      var trainElement = document.getElementById("train");
       var copyElement = document.getElementById('copy');
       var connectSuccessElement = document.getElementById('connect.success');
       var connectErrorElement = document.getElementById('connect.error');
-      var keyframeElements = [document.getElementById("train1"), document.getElementById("train2"), document.getElementById("train3")];
-      var keyframeCounter = 0;
-      var trainSignalled;
+      var trackElement = document.getElementById('track');
+      var hoveredTrain;
+      var hoveredInterval;
       
       peer.on('error', (error) => {
         if(error.type == 'peer-unavailable') {
@@ -102,17 +107,14 @@
       });
 
       function startTrain() {
-        if(interval) {
-          console.errror('Animation still running.');
-          return;
-        }
-
+        var trainElement = document.createElement('pre');
+        trainElement.classList.add('train');
+        trackElement.appendChild(trainElement);
         var trainStartX = -trainElement.getBoundingClientRect().width;
         var offsetX = 0;
         var clientWidth = Math.min(document.body.clientWidth, window.innerWidth);
-
-        trainSignalled = false;
-        keyframeCounter = 0;
+        var trainSignalled = false;
+        var keyframeCounter = 0;
 
         var interval = setInterval(function() {
           offsetX += OFFSET_INCREMENT;
@@ -123,25 +125,43 @@
             console.log("Ending animation.");
             clearInterval(interval);
             interval = null;
+            trackElement.removeChild(trainElement);
           } else if (offsetX > clientWidth) {
-            console.log("Starting next train.");
             signalNextTrainStart();
           }
         }, ANIMATION_INTERVAL);
-      }
+        
+        trainElement.onmouseover = function()  {
+          hoveredTrain = this;
+          hoveredInterval = interval;
+        };
+        
+        function drawTrain(xCoord) {
+          trainElement.style.right = xCoord;
+          drawKeyFrameContent();
+        }
 
-      function drawTrain(xCoord) {
-        trainElement.style.right = xCoord;
-        drawKeyFrameContent();
-      }
+        function drawKeyFrameContent() {
+          var previousKeyFrameIndex = Math.max((keyframeCounter - 1) % keyFrames.length, 0);
+          var currentKeyFrameIndex = keyframeCounter % keyFrames.length;
 
-      function drawKeyFrameContent() {
-        var previousKeyFrameIndex = Math.max((keyframeCounter - 1) % trainKeyFrames.length, 0);
-        var currentKeyFrameIndex = keyframeCounter % trainKeyFrames.length;
+          trainElement.textContent = keyFrames[previousKeyFrameIndex];
 
-        trainElement.textContent = trainKeyFrames[previousKeyFrameIndex];
-
-        keyframeCounter++;
+          keyframeCounter++;
+        }
+        
+        function signalNextTrainStart() {
+          if(!trainSignalled) {
+            trainSignalled = true;
+            if(!connOut) {
+              console.warn('No remote client connected.');
+              return;
+            }
+            console.log("Starting next train.");
+            connOut.send(MESSAGE_START_TRAIN);
+          }
+        }
+        
       }
 
       document.getElementById("btnStart").addEventListener("click", function(){
@@ -152,6 +172,17 @@
         var targetId = document.getElementById("inPeerOutgoing").value;
         connect(targetId);
       });
+      
+      document.onkeydown = function() {
+          var key = event.keyCode || event.charCode;
+
+          if(key == KEY_DEL && hoveredTrain) {
+            hoveredTrain.parentNode.removeChild(hoveredTrain);
+            hoveredTrain = null;
+            clearInterval(hoveredInterval);
+            return false;
+          }
+      };
 
       peer.on('open', function(id) {
         console.log(id);
@@ -160,16 +191,24 @@
         copyElement.style.display = 'inline';
       });
 
+      /**
+       * Starts receiving remote notifications from peers
+       */
       function receive() {
         peer.on('connection', function(conn) {
           conn.on('data', function(data) {
             if(data == MESSAGE_START_TRAIN) {
               startTrain();
-            } else console.log('I am being spammed: ', data);
+            } else console.warn('I am being spammed: ', data);
           });
         });
       }
 
+      /**
+       * Connect to peer with specified id
+       *
+       * @param id Id of remote peer
+       */
       function connect(id) {
         if(!connOut) {
           connOut = peer.connect(id);
@@ -189,6 +228,11 @@
         } else closeAndConnect(id);
       }
 
+      /**
+       * Closes the current outgoing connection and connects to the specified peer
+       *
+       * @param id Id of new remote peer
+       */
       function closeAndConnect(id) {
         connOut.on('close', () => {
             connOut = null;
@@ -197,18 +241,12 @@
           });
         connOut.close();
       }
-
-      function signalNextTrainStart() {
-        if(!connOut) {
-          console.warn('No remote client connected.');
-          return;
-        }
-        if(!trainSignalled) {
-          trainSignalled = true;
-          connOut.send(MESSAGE_START_TRAIN);
-        }
-      }
       
+      /**
+       * Copies the specified string to the local clipboard
+       *
+       * @param str String to copy
+       */
       function copyToClipboardRaw(str) {
         const el = document.createElement('textarea');
         el.value = str;
