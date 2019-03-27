@@ -102,7 +102,7 @@
     </div>
     <div id="status"></div>
   <br/>
-  <div class="section"><button id="btnBecomeMaster">Become Master</button><button id="btnStart">Start train!</button></div>
+  <div class="section"><button id="btnBecomeMaster">Become Master</button></div>
   <div id="btnDiv">
     <button id="btnStart">Start train!</button>
     <button id="btnAddFloat">Add Animation</button>
@@ -344,13 +344,13 @@
           var button = document.createElement("button");
           button.id = item.name;
           button.setAttribute("class", "customCollectionButtons");
-          button.addEventListener("click", sendCustomKeyframe);
+          button.addEventListener("click", startCustomKeyframe);
           button.innerHTML = item.name;
           collDiv.appendChild(button);
         })
       }
 
-      function sendCustomKeyframe(sender) {
+      function startCustomKeyframe(sender) {
         var keyframeName = sender.target.innerHTML;
         var keyframes = collectionOfCustomKeyframes.find((el) => {
           return el.name === keyframeName;
@@ -383,6 +383,7 @@
       function receive() {
         peer.on('connection', function(conn) {
           conn.on('data', function(data) {
+            console.log("received data", data)
             if (data.type === MESSAGE_START_CUSTOM) {
               startFloater(data.keyframes);
             }else console.warn('I am being spammed: ', data);
@@ -569,19 +570,6 @@
 
         // Connect last with master to create ring topology
         slaveConnections[slaveConnections.length - 1].connectTo(peer.id);
-      }
-
-      /**
-       * Starts receiving remote notifications from peers
-       */
-       function receive() {
-        peer.on('connection', function(conn) {
-          conn.on('data', function(data) {
-            if(data == MESSAGE_START_TRAIN) {
-              startFloater();
-            }
-          });
-        });
       }
 
       /**
