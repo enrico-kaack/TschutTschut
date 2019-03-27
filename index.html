@@ -12,6 +12,7 @@
 
   	pre.floater {
     	position: absolute;
+      left: 100%;
       bottom: 0px;
       min-width: 600px;
       margin: 0;
@@ -19,6 +20,11 @@
       animation-name: floater;
       animation-duration: 10s;
       animation-timing-function: linear;
+    }
+
+    div.section {
+      padding-left: 16px;
+      padding-top: 16px;
     }
 
     @keyframes floater {
@@ -29,23 +35,25 @@
 </head>
 <body style="overflow:hidden; color: #fff; background-color: #000; ">
   <div>
-    <div id="myId" style="display: inline-block; ">Connecting...</div><button id="copy" style="display: none; margin-left: 4px; " onclick="copyToClipboard()">Copy</button><br />
+    <div class="section">
+        <div id="myId" style="display: inline-block; ">Connecting...</div><button id="copy" style="display: none; margin-left: 4px; " onclick="copyToClipboard()">Copy</button><br />
     </div>
-    <div id="masterArea">
-    <button id="btnBecomeMaster">Become Master</button>
+    </div>
+    <div id="masterArea" class="section">
       <div id="slaveList">
-      Wanna become the master?
       </div>
-      <button id="btnConnectAllPeers" style="display: none;">Connect all Peers</button>
-
-      <input id="inPeerOutgoing" placeholder="peer on your left" type="text"/>
-      <button id="btnConnect">Connect</button>
+      <button id="btnConnectAllPeers" style="display: none; margin-top: 4px; ">Connect all Peers</button>
+    </div>
+    <div id="peerArea" class="section">
+        <input id="inPeerOutgoing" placeholder="peer on your left" type="text"/>
+        <button id="btnConnect">Connect</button>
     </div>
     <div id="status"></div>
     <img style="display: none; vertical-align: middle; margin-left: 4px; width: 16px; height: 16px; " id="connect.success" src="https://cdn3.iconfinder.com/data/icons/flat-actions-icons-9/512/Tick_Mark-256.png">
     <img style="display: none; vertical-align: middle; margin-left: 4px; width: 16px; height: 16px; " id="connect.error" src="https://cdn3.iconfinder.com/data/icons/flat-actions-icons-9/792/Close_Icon-256.png">
   <br/>
-  <button id="btnStart">Start train!</button>
+  <div class="section"><button id="btnBecomeMaster">Become Master</button><button id="btnStart">Start train!</button></div>
+
 
 
   <div id="track"></div>
@@ -114,7 +122,7 @@
       const OFFSET_INCREMENT = 10;
       const ANIMATION_INTERVAL = 40;
       const ANIMATION_DURATION_MILLIS = 10000;
-      const MAX_FRAME_COUNT = ANIMATION_DURATION_MILLIS/ANIMATION_INTERVAL - 1;
+      const MAX_FRAME_COUNT = ANIMATION_DURATION_MILLIS/ANIMATION_INTERVAL;
 
       let peer = new Peer({debug: true});
       var connIn, connOut;
@@ -122,9 +130,10 @@
        
       var connectSuccessElement = document.getElementById('connect.success');
       var connectErrorElement = document.getElementById('connect.error');
+      var peerAreaElement = document.getElementById('peerArea');
+      var masterAreaElement = document.getElementById('masterArea');
       var trackElement = document.getElementById('track');
-      var hoveredTrain;
-      var hoveredInterval;
+      var elementFloaterMap = {};
       
       peer.on('error', (error) => {
         if(error.type == 'peer-unavailable') {
@@ -139,19 +148,21 @@
           this.element = document.createElement('pre');
           this.element.classList.add('floater');
           this.element.textContent = this.keyFrames[0];
+          this.element.onclick = this.stop.bind(this);
+
           this.endSignalled = false;
           this.interval = null;
           this.frameCounter = 0;
-
-          this.element.onmouseover = function()  {
-            hoveredTrain = this;
-            hoveredInterval = interval;
-          };
         }
 
         start() {
-          track.appendChild(this.element);
+          trackElement.appendChild(this.element);
           this.interval = setInterval(this.update.bind(this), ANIMATION_INTERVAL);
+        }
+
+        stop() {
+          trackElement.removeChild(this.element);
+          clearInterval(this.interval);
         }
 
         update() {
@@ -208,18 +219,6 @@
 
       document.getElementById("btnBecomeMaster").addEventListener("click", becomeMaster);
       document.getElementById("btnConnectAllPeers").addEventListener("click", sendConnectionCommands);
-
-      
-      document.onkeydown = function() {
-          var key = event.keyCode || event.charCode;
-
-          if(key == KEY_DEL && hoveredTrain) {
-            hoveredTrain.parentNode.removeChild(hoveredTrain);
-            hoveredTrain = null;
-            clearInterval(hoveredInterval);
-            return false;
-          }
-      };
 
       peer.on('open', function(id) {
         console.log(id);
@@ -338,6 +337,8 @@
         document.getElementById('myId').innerHTML = masterUrl;
         copyToClipboard = copyToClipboardRaw.bind(null, masterUrl);
         copyButton.style.display = 'inline';
+        document.getElementById('btnBecomeMaster').style.display = 'none';
+        document.getElementById('peerArea').style.display = 'none';
         document.getElementById("btnConnectAllPeers").style.display = "block";
         document.getElementById("slaveList").innerHTML = "Waiting for peers, let the one to your left open the url next";
 
