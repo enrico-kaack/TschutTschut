@@ -22,6 +22,33 @@
       animation-timing-function: linear;
     }
 
+    div.peer\.id {
+      display: inline-block;
+    }
+
+    div.peer\.status {
+      display: inline-block;
+      vertical-align: middle;
+      margin-left: 4px;
+      width: 16px;
+      height: 16px;
+    }
+
+    div.peer\.status\.pending {
+      background: url('img/pending.png');
+      background-size: contain;
+    }
+
+    div.peer\.status\.success {
+      background: url('img/success.png');
+      background-size: contain;
+    }
+
+    div.peer\.status\.error {
+      background: url('img/error.png');
+      background-size: contain;
+    }
+
     div.section {
       padding-left: 16px;
       padding-top: 16px;
@@ -39,8 +66,9 @@
         <div id="myId" style="display: inline-block; ">Connecting...</div><button id="copy" style="display: none; margin-left: 4px; " onclick="copyToClipboard()">Copy</button><br />
     </div>
     </div>
-    <div id="masterArea" class="section">
-      <div id="slaveList">
+    <div id="masterArea" class="section" style="display: none; ">
+      Waiting for peers, let the one to your left open the url next
+      <div id="slaveList" class="section">
       </div>
       <button id="btnConnectAllPeers" style="display: none; margin-top: 4px; ">Connect all Peers</button>
     </div>
@@ -49,8 +77,6 @@
         <button id="btnConnect">Connect</button>
     </div>
     <div id="status"></div>
-    <img style="display: none; vertical-align: middle; margin-left: 4px; width: 16px; height: 16px; " id="connect.success" src="https://cdn3.iconfinder.com/data/icons/flat-actions-icons-9/512/Tick_Mark-256.png">
-    <img style="display: none; vertical-align: middle; margin-left: 4px; width: 16px; height: 16px; " id="connect.error" src="https://cdn3.iconfinder.com/data/icons/flat-actions-icons-9/792/Close_Icon-256.png">
   <br/>
   <div class="section"><button id="btnBecomeMaster">Become Master</button><button id="btnStart">Start train!</button></div>
 
@@ -119,6 +145,7 @@
       const MESSAGE_START_TRAIN = 'train.start';
       const MESSAGE_SYNC = 'SYN';
       const MESSAGE_CONNECT = 'CON';
+      const MESSAGE_ACKNOWLEDGED = 'ACK';
       const OFFSET_INCREMENT = 10;
       const ANIMATION_INTERVAL = 40;
       const ANIMATION_DURATION_MILLIS = 10000;
@@ -128,8 +155,7 @@
       var connIn, connOut;
       var copyButton = document.getElementById('copy');
        
-      var connectSuccessElement = document.getElementById('connect.success');
-      var connectErrorElement = document.getElementById('connect.error');
+      var slaveListElement = document.getElementById('slaveList');
       var peerAreaElement = document.getElementById('peerArea');
       var masterAreaElement = document.getElementById('masterArea');
       var trackElement = document.getElementById('track');
@@ -137,8 +163,7 @@
       
       peer.on('error', (error) => {
         if(error.type == 'peer-unavailable') {
-          connectSuccessElement.style.display = 'none';
-        	connectErrorElement.style.display = 'inline';
+          console.error(error);
         }
       });
 
@@ -201,7 +226,6 @@
             connOut.send(MESSAGE_START_TRAIN);
           }
         }
-
       }
 
       function startFloater() {
@@ -221,62 +245,10 @@
       document.getElementById("btnConnectAllPeers").addEventListener("click", sendConnectionCommands);
 
       peer.on('open', function(id) {
-        console.log(id);
         document.getElementById('myId').innerHTML = 'Your ID: ' + id;
         copyToClipboard = copyToClipboardRaw.bind(null, id);
         copyButton.style.display = 'inline';
       });
-
-      /**
-       * Starts receiving remote notifications from peers
-       */
-      function receive() {
-        peer.on('connection', function(conn) {
-          conn.on('data', function(data) {
-            if(data == MESSAGE_START_TRAIN) {
-              startFloater();
-            } else console.warn('I am being spammed: ', data);
-          });
-        });
-      }
-
-      /**
-       * Connect to peer with specified id
-       *
-       * @param id Id of remote peer
-       */
-      function connect(id) {
-        if(!connOut) {
-          connOut = peer.connect(id);
-          connOut.on('open', function(){
-            console.log('Remote client connected: ', id);
-            connectErrorElement.style.display = 'none';
-            connectSuccessElement.style.display = 'inline';
-          });
-          connOut.on('error)', () => {
-            connectSuccessElement.style.display = 'none';
-            connectErrorElement.style.display = 'inline';
-          });
-          connOut.on('close', () => {
-            connectSuccessElement.style.display = 'none';
-            connectErrorElement.style.display = 'inline';
-          });
-        } else closeAndConnect(id);
-      }
-
-      /**
-       * Closes the current outgoing connection and connects to the specified peer
-       *
-       * @param id Id of new remote peer
-       */
-      function closeAndConnect(id) {
-        connOut.on('close', () => {
-            connOut = null;
-            console.log('Remote client disconnected: ', id);
-            connect(id);
-          });
-        connOut.close();
-      }
       
       /**
        * Copies the specified string to the local clipboard
@@ -295,6 +267,62 @@
         document.body.removeChild(el);
       }
 
+      class SlaveConnection {
+        constructor(connection) {
+          this.connection = connection;
+          this.element = document.createElement('div');
+          this.element.classList.add('peer.connection')
+          this.idElement = document.createElement('div');
+          this.idElement.classList.add('peer.id')
+          this.idElement.textContent = this.connection.peer;
+          this.element.appendChild(this.idElement);
+          this.statusElement = document.createElement('div');
+          this.statusElement.classList.add('peer.status')
+          this.element.appendChild(this.statusElement);
+          slaveListElement.appendChild(this.element);
+          
+          this.connection.on('data', function(data) {
+            if(data.type && data.type === MESSAGE_ACKNOWLEDGED) this.statusSuccess();
+          }.bind(this));
+          this.connection.on('error', this.statusError.bind(this));
+          this.connection.on('close', function() {
+            this.remove();
+            sendConnectionCommands();
+          }.bind(this));
+
+          this.statusPending();
+        }
+
+        connectTo(otherPeerId) {
+          console.log("send", this.connection.peer, "to connect to", otherPeerId);
+          this.connection.send({type: MESSAGE_CONNECT, target: otherPeerId});
+        }
+
+        statusPending() {
+          this.statusElement.classList.add('peer.status.pending');
+          this.statusElement.classList.remove('peer.status.success');
+          this.statusElement.classList.remove('peer.status.error');
+        }
+
+        statusSuccess() {
+          this.statusElement.classList.add('peer.status.success');
+          this.statusElement.classList.remove('peer.status.pending');
+          this.statusElement.classList.remove('peer.status.error')
+        }
+
+        statusError() {
+          this.statusElement.classList.add('peer.status.error');
+          this.statusElement.classList.remove('peer.status.pending');
+          this.statusElement.classList.remove('peer.status.error')
+        }
+
+        remove() {
+          slaveListElement.removeChild(this.element);
+          if(~slaveConnections.indexOf(this)) {
+            slaveConnections.splice(slaveConnections.indexOf(this), 1);
+          }
+        }
+      }
 
       function connectToMaster(masterId) {
           var connToMaster = peer.connect(masterId);
@@ -306,7 +334,7 @@
             console.error("could not connect to master");
           });
           connToMaster.on('close', () => {
-
+            console.log('Master conn closed');
           });
           connToMaster.on('data', (data) => {
             if (data.type === MESSAGE_SYNC) {
@@ -314,21 +342,12 @@
             } else if (data.type === MESSAGE_CONNECT) {
               console.log("Received connection command to", data.target);
               connect(data.target);
+              connToMaster.send({type: MESSAGE_ACKNOWLEDGED});
             }
         });
       }
 
-      var masterConnections = [];
-
-      function refreshSlaveList() {
-        console.log(masterConnections);
-        var listElement = document.getElementById("slaveList");
-        var inHtml = "";
-        masterConnections.forEach((item)=> {
-          inHtml += item.peer +"</br>";
-        })
-        listElement.innerHTML = inHtml;
-      }
+      var slaveConnections = [];
 
       function becomeMaster() {
         //probably wait for on open
@@ -338,9 +357,9 @@
         copyToClipboard = copyToClipboardRaw.bind(null, masterUrl);
         copyButton.style.display = 'inline';
         document.getElementById('btnBecomeMaster').style.display = 'none';
+        masterArea.style.display = 'block';
         document.getElementById('peerArea').style.display = 'none';
         document.getElementById("btnConnectAllPeers").style.display = "block";
-        document.getElementById("slaveList").innerHTML = "Waiting for peers, let the one to your left open the url next";
 
         //startup listening server
         peer.on('connection', (conn) => {
@@ -350,8 +369,7 @@
 
             if (data.type === "SYN") {
               console.log("Slave connected", conn.peer)
-              masterConnections.push(conn);
-              refreshSlaveList();
+              slaveConnections.push(new SlaveConnection(conn));
             } else if (data.type === "CON") {
               console.log("Received connection command to", data.target);
             }
@@ -360,32 +378,82 @@
       }
 
       function sendConnectionCommands() {
-        console.log("sending connect command");
-        //create the ring topology
-        for (var i = 0; i < masterConnections.length - 1; i++) {
-          masterConnections[i].send({type: "CON", target: masterConnections[i+1].peer});
-          console.log("send", masterConnections[i], "to connect to ", masterConnections[i+1].peer);
+        if(!slaveConnections.length) return;
 
+        console.log("sending connect commands");
+        // Connect first (master) with first one in list
+        connect(slaveConnections[0].connection.peer);
+
+        // Connect slaves
+        for (var i = 0; i < slaveConnections.length - 1; i++) {
+          slaveConnections[i].connectTo(slaveConnections[i+1].connection.peer);
         }
 
-        //connect last with master
-        masterConnections[masterConnections.length -1].send({type: "CON", target: peer.id});
-
-        //connect first (master) with first one in list
-        connect(masterConnections[0].peer);
+        // Connect last with master to create ring topology
+        slaveConnections[slaveConnections.length - 1].connectTo(peer.id);
       }
 
-      //starup check for masterId in url
-      var currentUrl = new URL(window.location.href);
-      console.log(currentUrl)
-      var masterId = currentUrl.searchParams.get("master");
-      if (masterId) {
-        document.getElementById("masterArea").style.display = "none";
-        document.getElementById("status").innerHTML = "Please wait for master to Start";
-
-        connectToMaster(masterId);
+      /**
+       * Starts receiving remote notifications from peers
+       */
+       function receive() {
+        peer.on('connection', function(conn) {
+          conn.on('data', function(data) {
+            if(data == MESSAGE_START_TRAIN) {
+              startFloater();
+            }
+          });
+        });
       }
 
+      /**
+       * Connect to peer with specified id
+       *
+       * @param id Id of remote peer
+       */
+      function connect(id) {
+        if(!connOut) {
+          connOut = peer.connect(id);
+          connOut.on('open', function(){
+            console.log('Remote client connected: ', id);
+          });
+          connOut.on('error)', () => {
+            console.log('Remote client error');
+          });
+          connOut.on('close', () => {
+            console.log('Remote client connection closed');
+          });
+        } else closeAndConnect(id);
+      }
+
+      /**
+       * Closes the current outgoing connection and connects to the specified peer
+       *
+       * @param id Id of new remote peer
+       */
+      function closeAndConnect(id) {
+        connOut.on('close', () => {
+            connOut = null;
+            console.log('Remote client disconnected: ', id);
+            connect(id);
+          });
+        connOut.close();
+      }
+
+      function checkSlaveModeAndConnectToMaster() {
+        // Startup check for masterId in url
+        var currentUrl = new URL(window.location.href);
+        console.log(currentUrl)
+        var masterId = currentUrl.searchParams.get("master");
+        if (masterId) {
+          document.getElementById("masterArea").style.display = "none";
+          document.getElementById("status").innerHTML = "Please wait for master to Start";
+
+          connectToMaster(masterId);
+        }
+      }
+
+      checkSlaveModeAndConnectToMaster();
       receive();
     })();
   </script>
