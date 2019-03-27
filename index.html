@@ -196,6 +196,7 @@
       const MESSAGE_SYNC = 'SYN';
       const MESSAGE_CONNECT = 'CON';
       const MESSAGE_ACKNOWLEDGED = 'ACK';
+      const MESSAGE_START_CUSTOM = 'custom.start';
       const OFFSET_INCREMENT = 10;
       const ANIMATION_INTERVAL = 40;
       const ANIMATION_DURATION_MILLIS = 10000;
@@ -277,13 +278,13 @@
               return;
             }
             console.log("Starting next train.");
-            connOut.send(MESSAGE_START_TRAIN);
+            connOut.send({type: MESSAGE_START_CUSTOM, keyframes: this.keyFrames});
           }
         }
       }
 
-      function startFloater() {
-        new Floater().start();
+      function startFloater(keyframes) {
+        new Floater(keyframes).start();
       }
 
       document.getElementById("btnStart").addEventListener("click", function(){
@@ -375,6 +376,57 @@
         copyToClipboard = copyToClipboardRaw.bind(null, id);
         copyButton.style.display = 'inline';
       });
+
+      /**
+       * Starts receiving remote notifications from peers
+       */
+      function receive() {
+        peer.on('connection', function(conn) {
+          conn.on('data', function(data) {
+            if (data.type === MESSAGE_START_CUSTOM) {
+              startFloater(data.keyframes);
+            }else console.warn('I am being spammed: ', data);
+          });
+        });
+      }
+
+      /**
+       * Connect to peer with specified id
+       *
+       * @param id Id of remote peer
+       */
+      function connect(id) {
+        if(!connOut) {
+          connOut = peer.connect(id);
+          connOut.on('open', function(){
+            console.log('Remote client connected: ', id);
+            connectErrorElement.style.display = 'none';
+            connectSuccessElement.style.display = 'inline';
+          });
+          connOut.on('error)', () => {
+            connectSuccessElement.style.display = 'none';
+            connectErrorElement.style.display = 'inline';
+          });
+          connOut.on('close', () => {
+            connectSuccessElement.style.display = 'none';
+            connectErrorElement.style.display = 'inline';
+          });
+        } else closeAndConnect(id);
+      }
+
+      /**
+       * Closes the current outgoing connection and connects to the specified peer
+       *
+       * @param id Id of new remote peer
+       */
+      function closeAndConnect(id) {
+        connOut.on('close', () => {
+            connOut = null;
+            console.log('Remote client disconnected: ', id);
+            connect(id);
+          });
+        connOut.close();
+      }
       
       /**
        * Copies the specified string to the local clipboard
