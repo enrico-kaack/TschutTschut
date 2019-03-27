@@ -4,21 +4,30 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>SyncFiddle</title>
+  <title>TschutTschut</title>
   <style>
     body {
       font-family: "Helvetica Neue", Helvetica, sans-serif;
     }
 
-  	pre.train {
+  	pre.floater {
     	position: absolute;
-      right: -1000px;
       bottom: 0px;
       min-width: 600px;
+      margin: 0;
+      padding: 0;
+      animation-name: floater;
+      animation-duration: 10s;
+      animation-timing-function: linear;
+    }
+
+    @keyframes floater {
+      from { left: 100% }
+      to { left: -100% }
     }
   </style>
 </head>
-<body style="overflow:hidden; color: #fff; background-color: #000;">
+<body style="overflow:hidden; color: #fff; background-color: #000; ">
   <div>
     <div id="myId" style="display: inline-block; ">Connecting...</div><button id="copy" style="display: none; margin-left: 4px; " onclick="copyToClipboard()">Copy</button><br />
     </div>
@@ -44,8 +53,10 @@
     var copyToClipboard;
     
     (() => {
+      'use strict';
+
       // See the console window at bottom.
-      var keyFrames = [
+      let TRAIN_KEY_FRAMES = [
 				"                                      (@@@)            \n" +
 				"                                        (@@@@@@@)                 \n" +
 				"                                                  (@@@@@@@@@@@)\n" +
@@ -94,14 +105,21 @@
 				"  /__;^=(__)______(__)______(__)=^~^^^ ^^^^(-)^^^^(-)^^^^(-)^^^ jgs    \n" +
 				"~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"];
       
-      var KEY_DEL = 46;
-      var MESSAGE_START_TRAIN = 'train.start';
-      var OFFSET_INCREMENT = 10;
-      var ANIMATION_INTERVAL = 50;
-      var peer = new Peer({debug: true});
+      var keyFrames = TRAIN_KEY_FRAMES;
+
+      const KEY_DEL = 46;
+      const MESSAGE_START_TRAIN = 'train.start';
+      const MESSAGE_SYNC = 'SYN';
+      const MESSAGE_CONNECT = 'CON';
+      const OFFSET_INCREMENT = 10;
+      const ANIMATION_INTERVAL = 40;
+      const ANIMATION_DURATION_MILLIS = 10000;
+      const MAX_FRAME_COUNT = ANIMATION_DURATION_MILLIS/ANIMATION_INTERVAL - 1;
+
+      let peer = new Peer({debug: true});
       var connIn, connOut;
-      var copyElement = document.getElementById('copy');
-      
+      var copyButton = document.getElementById('copy');
+       
       var connectSuccessElement = document.getElementById('connect.success');
       var connectErrorElement = document.getElementById('connect.error');
       var trackElement = document.getElementById('track');
@@ -115,53 +133,55 @@
         }
       });
 
-      function startTrain() {
-        var trainElement = document.createElement('pre');
-        trainElement.classList.add('train');
-        trackElement.appendChild(trainElement);
-        var trainStartX = -trainElement.getBoundingClientRect().width;
-        var offsetX = 0;
-        var clientWidth = Math.min(document.body.clientWidth, window.innerWidth);
-        var trainSignalled = false;
-        var keyframeCounter = 0;
+      class Floater {
+        constructor(keyFrames) {
+          this.keyFrames = keyFrames || TRAIN_KEY_FRAMES;
+          this.element = document.createElement('pre');
+          this.element.classList.add('floater');
+          this.element.textContent = this.keyFrames[0];
+          this.endSignalled = false;
+          this.interval = null;
+          this.frameCounter = 0;
 
-        var interval = setInterval(function() {
-          offsetX += OFFSET_INCREMENT;
-          var trainPositionX = trainStartX + offsetX;
-          drawTrain(trainPositionX);
+          this.element.onmouseover = function()  {
+            hoveredTrain = this;
+            hoveredInterval = interval;
+          };
+        }
 
-          if (trainPositionX > clientWidth) {
-            console.log("Ending animation.");
-            clearInterval(interval);
-            interval = null;
-            trackElement.removeChild(trainElement);
-          } else if (offsetX > clientWidth) {
-            signalNextTrainStart();
+        start() {
+          track.appendChild(this.element);
+          this.interval = setInterval(this.update.bind(this), ANIMATION_INTERVAL);
+        }
+
+        update() {
+          this.updateKeyFrame();
+
+          if(this.element.offsetLeft <= 0) {
+            this.signalNextTrainStart();
           }
-        }, ANIMATION_INTERVAL);
-        
-        trainElement.onmouseover = function()  {
-          hoveredTrain = this;
-          hoveredInterval = interval;
-        };
-        
-        function drawTrain(xCoord) {
-          trainElement.style.right = xCoord;
-          drawKeyFrameContent();
+
+          if(this.frameCounter >= MAX_FRAME_COUNT) {
+            console.log("Floater expiring.");
+            clearInterval(this.interval);
+            this.interval = null;
+            trackElement.removeChild(this.element);
+          }
+
+          this.frameCounter++;
         }
 
-        function drawKeyFrameContent() {
-          var previousKeyFrameIndex = Math.max((keyframeCounter - 1) % keyFrames.length, 0);
-          var currentKeyFrameIndex = keyframeCounter % keyFrames.length;
-
-          trainElement.textContent = keyFrames[previousKeyFrameIndex];
-
-          keyframeCounter++;
+        updateKeyFrame() {
+          this.element.textContent = this.keyFrames[this.currentKeyFrameIndex];
         }
-        
-        function signalNextTrainStart() {
-          if(!trainSignalled) {
-            trainSignalled = true;
+
+        get currentKeyFrameIndex() {
+          return this.frameCounter % this.keyFrames.length;
+        }
+
+        signalNextTrainStart() {
+          if(!this.trainSignalled) {
+            this.trainSignalled = true;
             if(!connOut) {
               console.warn('No remote client connected.');
               return;
@@ -170,11 +190,15 @@
             connOut.send(MESSAGE_START_TRAIN);
           }
         }
-        
+
+      }
+
+      function startFloater() {
+        new Floater().start();
       }
 
       document.getElementById("btnStart").addEventListener("click", function(){
-        startTrain();
+        startFloater();
       });
 
       document.getElementById("btnConnect").addEventListener("click", function(){
@@ -201,7 +225,7 @@
         console.log(id);
         document.getElementById('myId').innerHTML = 'Your ID: ' + id;
         copyToClipboard = copyToClipboardRaw.bind(null, id);
-        copyElement.style.display = 'inline';
+        copyButton.style.display = 'inline';
       });
 
       /**
@@ -211,7 +235,7 @@
         peer.on('connection', function(conn) {
           conn.on('data', function(data) {
             if(data == MESSAGE_START_TRAIN) {
-              startTrain();
+              startFloater();
             } else console.warn('I am being spammed: ', data);
           });
         });
@@ -277,7 +301,7 @@
           var connToMaster = peer.connect(masterId);
           connToMaster.on('open', function(){
             console.log('connected to master: ', masterId);
-            connToMaster.send({type: "SYN"})
+            connToMaster.send({type: MESSAGE_SYNC})
           });
           connToMaster.on('error)', () => {
             console.error("could not connect to master");
@@ -285,10 +309,10 @@
           connToMaster.on('close', () => {
 
           });
-          connToMaster.on('data', (data) =>{
-            if (data.type === "SYN") {
+          connToMaster.on('data', (data) => {
+            if (data.type === MESSAGE_SYNC) {
               console.error("wrong command received");
-            } else if (data.type === "CON") {
+            } else if (data.type === MESSAGE_CONNECT) {
               console.log("Received connection command to", data.target);
               connect(data.target);
             }
@@ -313,25 +337,25 @@
         var masterUrl = window.location.href  + "?master=" + peer.id
         document.getElementById('myId').innerHTML = masterUrl;
         copyToClipboard = copyToClipboardRaw.bind(null, masterUrl);
-        copyElement.style.display = 'inline';
+        copyButton.style.display = 'inline';
         document.getElementById("btnConnectAllPeers").style.display = "block";
         document.getElementById("slaveList").innerHTML = "Waiting for peers, let the one to your left open the url next";
 
         //startup listening server
         peer.on('connection', (conn) => {
           console.log(conn.peer);
-        conn.on('data', (data) =>{
-          console.log(data);
+          conn.on('data', (data) =>{
+            console.log(data);
 
-          if (data.type === "SYN") {
-            console.log("Slave connected", conn.peer)
-            masterConnections.push(conn);
-            refreshSlaveList();
-          } else if (data.type === "CON") {
-            console.log("Received connection command to", data.target);
-          }
+            if (data.type === "SYN") {
+              console.log("Slave connected", conn.peer)
+              masterConnections.push(conn);
+              refreshSlaveList();
+            } else if (data.type === "CON") {
+              console.log("Received connection command to", data.target);
+            }
+          });
         });
-});
       }
 
       function sendConnectionCommands() {
