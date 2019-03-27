@@ -10,6 +10,30 @@
       font-family: "Helvetica Neue", Helvetica, sans-serif;
     }
 
+    .modal {
+        display: none; /* Hidden by default */
+        position: fixed; /* Stay in place */
+        z-index: 1; /* Sit on top */
+        left: 0;
+        right: 0;
+        margin-left: auto;
+        margin-right: auto;
+        width: 50%; /* Full width */
+        height: 80%; /* Full height */
+        overflow: auto; /* Enable scroll if needed */
+        background-color: rgb(63, 56, 56, .8); /* Fallback color */
+    }
+    .modal-content {
+        margin: 5% auto; /* 15% from the top and centered */
+        padding: 20px;
+        border: 1px solid #888;
+        width: 80%; /* Could be more or less, depending on screen size */
+    }
+    .keyframeTextArea {
+        height: 200px;
+        width: 100%
+    }
+
   	pre.floater {
     	position: absolute;
       left: 100%;
@@ -79,8 +103,34 @@
     <div id="status"></div>
   <br/>
   <div class="section"><button id="btnBecomeMaster">Become Master</button><button id="btnStart">Start train!</button></div>
+  <div id="btnDiv">
+    <button id="btnStart">Start train!</button>
+    <button id="btnAddFloat">Add Animation</button>
+    <div id="customCollectionDiv">
+
+    </div>
+  </div>
 
 
+
+  <div id="modalAddKeyframe" class="modal">
+    <div class="modal-content">
+    <h3>Add new keyframe animation</h3>
+    <span>Animation Name  </span><input id="inKeyframeName" placeholder="Animation Name" type="text"/>
+    <div id="keyframeList">
+      <div>
+        <h4>Next Keyframe</h4>
+        <textarea class="keyframeTextArea"></textarea>
+      </div>
+    </div>
+
+  </div>
+  <div style="display: inline-blick; vertical-align: bottom;">
+      <button id="btnAddKeyframe">Add keyframe</button>
+      <button id="btnSaveAndCloseAddKeyframe">Save</button>
+
+  </div>
+  </div>
 
   <div id="track"></div>
   <script type="text/javascript">
@@ -161,6 +211,10 @@
       var trackElement = document.getElementById('track');
       var elementFloaterMap = {};
       
+      var collectionOfCustomKeyframes = JSON.parse(window.localStorage.getItem("collection"));
+      if (collectionOfCustomKeyframes === null) {collectionOfCustomKeyframes = []} 
+      refreshCustomCollectionView();
+
       peer.on('error', (error) => {
         if(error.type == 'peer-unavailable') {
           console.error(error);
@@ -243,6 +297,78 @@
 
       document.getElementById("btnBecomeMaster").addEventListener("click", becomeMaster);
       document.getElementById("btnConnectAllPeers").addEventListener("click", sendConnectionCommands);
+
+      document.getElementById("btnAddFloat").addEventListener("click", () => {
+        document.getElementById('modalAddKeyframe').style.display = "block";
+      });
+
+      document.getElementById("btnAddKeyframe").addEventListener("click", () => {
+        var keyframeList = document.getElementById('keyframeList');
+        var lastChild = keyframeList.lastElementChild;
+        var copy = lastChild.cloneNode(true);
+        keyframeList.appendChild(copy);
+        console.log("add keyframe", keyframeList, lastChild, copy);
+      });
+
+      document.getElementById("btnSaveAndCloseAddKeyframe").addEventListener("click", () => {
+        var keyframeList = document.getElementsByClassName('keyframeTextArea');
+        
+        var listOfKeyframes = [];
+        
+        for (var i=0; i<keyframeList.length;i++) {
+          listOfKeyframes.push(keyframeList[i].value);
+
+        }
+        console.log(listOfKeyframes);
+        collectionOfCustomKeyframes.push({name: document.getElementById("inKeyframeName").value, keyframes: listOfKeyframes});
+        document.getElementById('modalAddKeyframe').style.display = "none";
+        saveAndRefreshCustomCollection();
+      });
+
+      function saveAndRefreshCustomCollection() {
+        window.localStorage.setItem("collection", JSON.stringify(collectionOfCustomKeyframes));
+        refreshCustomCollectionView();
+      }
+
+      function refreshCustomCollectionView() {
+        console.log("refresh custom colleciton list view", collectionOfCustomKeyframes);
+        var collDiv = document.getElementById("customCollectionDiv");
+        //delete all childs
+        while (collDiv.firstChild) {
+          collDiv.removeChild(collDiv.firstChild);
+        }
+        
+        //repopulate list
+        collectionOfCustomKeyframes.forEach((item) => {
+          var button = document.createElement("button");
+          button.id = item.name;
+          button.setAttribute("class", "customCollectionButtons");
+          button.addEventListener("click", sendCustomKeyframe);
+          button.innerHTML = item.name;
+          collDiv.appendChild(button);
+        })
+      }
+
+      function sendCustomKeyframe(sender) {
+        var keyframeName = sender.target.innerHTML;
+        var keyframes = collectionOfCustomKeyframes.find((el) => {
+          return el.name === keyframeName;
+        }).keyframes;
+        new Floater(keyframes).start();
+      }
+
+
+      
+      document.onkeydown = function() {
+          var key = event.keyCode || event.charCode;
+
+          if(key == KEY_DEL && hoveredTrain) {
+            hoveredTrain.parentNode.removeChild(hoveredTrain);
+            hoveredTrain = null;
+            clearInterval(hoveredInterval);
+            return false;
+          }
+      };
 
       peer.on('open', function(id) {
         document.getElementById('myId').innerHTML = 'Your ID: ' + id;
