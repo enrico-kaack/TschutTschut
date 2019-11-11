@@ -283,7 +283,7 @@
               console.warn('No remote client connected.');
               return;
             }
-            console.log("Starting next train.");
+            console.log("Starting next train on", connOut.peer);
             connOut.send({type: MESSAGE_START_CUSTOM, keyframes: this.keyFrames});
           }
         }
@@ -555,7 +555,6 @@
         //startup listening server
         localPeer.on('connection', (conn) => {
           conn.on('data', (data) =>{
-
             if (data.type === "SYN") {
               console.log("Slave connected", conn.peer)
               slaveConnections.push(new SlaveConnection(conn));
@@ -593,8 +592,8 @@
           connOut.on('open', function(){
             console.log('Remote client connected: ', id);
           });
-          connOut.on('error)', () => {
-            console.log('Remote client error');
+          connOut.on('error)', (error) => {
+            console.log('Remote client error: ' + error);
           });
           connOut.on('close', () => {
             console.log('Remote client connection closed');
