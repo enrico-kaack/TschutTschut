@@ -245,18 +245,24 @@
           clearInterval(this.interval);
         }
 
+        hasReachedEnd() {
+          return this.element.offsetLeft <= 0;
+        }
+
+        hasLeftScreen() {
+          return this.frameCounter >= MAX_FRAME_COUNT;
+        }
+
         update() {
           this.updateKeyFrame();
 
-          if(this.element.offsetLeft <= 0) {
+          if(this.hasReachedEnd()) {
             this.signalNextTrainStart();
           }
 
-          if(this.frameCounter >= MAX_FRAME_COUNT) {
+          if(this.hasLeftScreen()) {
             console.log("Floater expiring.");
-            clearInterval(this.interval);
-            this.interval = null;
-            trackElement.removeChild(this.element);
+            this.cleanupFloater();
           }
 
           this.frameCounter++;
@@ -280,6 +286,12 @@
             console.log("Starting next train.");
             connOut.send({type: MESSAGE_START_CUSTOM, keyframes: this.keyFrames});
           }
+        }
+
+        cleanupFloater() {
+            clearInterval(this.interval);
+            this.interval = null;
+            trackElement.removeChild(this.element);
         }
       }
 
