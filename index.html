@@ -202,7 +202,7 @@
       const ANIMATION_DURATION_MILLIS = 10000;
       const MAX_FRAME_COUNT = ANIMATION_DURATION_MILLIS/ANIMATION_INTERVAL;
 
-      let peer = new Peer({debug: true});
+      let localPeer = new Peer({debug: true});
       var connIn, connOut;
       var copyButton = document.getElementById('copy');
        
@@ -216,7 +216,7 @@
       if (collectionOfCustomKeyframes === null) {collectionOfCustomKeyframes = []} 
       refreshCustomCollectionView();
 
-      peer.on('error', (error) => {
+      localPeer.on('error', (error) => {
         if(error.type == 'peer-unavailable') {
           console.error(error);
         }
@@ -383,7 +383,7 @@
           }
       };
 
-      peer.on('open', function(id) {
+      localPeer.on('open', function(id) {
         document.getElementById('myId').innerHTML = 'Your ID: ' + id;
         copyToClipboard = copyToClipboardRaw.bind(null, id);
         copyButton.style.display = 'inline';
@@ -393,7 +393,7 @@
        * Starts receiving remote notifications from peers
        */
       function receive() {
-        peer.on('connection', function(conn) {
+        localPeer.on('connection', function(conn) {
           conn.on('data', function(data) {
             console.log("received data", data)
             if (data.type === MESSAGE_START_CUSTOM) {
@@ -410,7 +410,7 @@
        */
       function connect(id) {
         if(!connOut) {
-          connOut = peer.connect(id);
+          connOut = localPeer.connect(id);
           connOut.on('open', function(){
             console.log('Remote client connected: ', id);
             connectErrorElement.style.display = 'none';
@@ -516,7 +516,7 @@
       }
 
       function connectToMaster(masterId) {
-          var connToMaster = peer.connect(masterId);
+          var connToMaster = localPeer.connect(masterId);
           connToMaster.on('open', function(){
             console.log('connected to master: ', masterId);
             connToMaster.send({type: MESSAGE_SYNC})
@@ -542,8 +542,8 @@
 
       function becomeMaster() {
         //probably wait for on open
-        console.log("master", peer.id);
-        var masterUrl = window.location.href  + "?master=" + peer.id
+        console.log("master", localPeer.id);
+        var masterUrl = window.location.href  + "?master=" + localPeer.id
         document.getElementById('myId').innerHTML = masterUrl;
         copyToClipboard = copyToClipboardRaw.bind(null, masterUrl);
         copyButton.style.display = 'inline';
@@ -553,10 +553,8 @@
         document.getElementById("btnConnectAllPeers").style.display = "block";
 
         //startup listening server
-        peer.on('connection', (conn) => {
-          console.log(conn.peer);
+        localPeer.on('connection', (conn) => {
           conn.on('data', (data) =>{
-            console.log(data);
 
             if (data.type === "SYN") {
               console.log("Slave connected", conn.peer)
@@ -581,7 +579,7 @@
         }
 
         // Connect last with master to create ring topology
-        slaveConnections[slaveConnections.length - 1].connectTo(peer.id);
+        slaveConnections[slaveConnections.length - 1].connectTo(localPeer.id);
       }
 
       /**
@@ -591,7 +589,7 @@
        */
       function connect(id) {
         if(!connOut) {
-          connOut = peer.connect(id);
+          connOut = localPeer.connect(id);
           connOut.on('open', function(){
             console.log('Remote client connected: ', id);
           });
