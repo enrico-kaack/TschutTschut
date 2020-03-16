@@ -14,6 +14,9 @@
         </tr>
       </tbody>
     </v-simple-table>
+    <div>
+      <v-btn id="startBtnDiv" depressed x-large color="success">Start Game</v-btn>
+    </div>
   </div>
 </template>
 
@@ -28,5 +31,8 @@ export default {
 };
 </script>
 
-<style>
+<style scoped>
+#startBtnDiv {
+  width: 100%;
+}
 </style>
