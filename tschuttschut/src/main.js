@@ -7,7 +7,7 @@ import VuePeerJS from 'vue-peerjs';
 import Peer from 'peerjs';
 
 Vue.config.productionTip = false
-Vue.use(VuePeerJS, new Peer({debug: 4}), {store})
+Vue.use(VuePeerJS, new Peer({debug: 3}), {store})
 
 new Vue({
   router,

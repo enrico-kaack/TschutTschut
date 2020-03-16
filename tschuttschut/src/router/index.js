@@ -1,6 +1,7 @@
 import Vue from 'vue'
 import VueRouter from 'vue-router'
 import Home from '../views/Home.vue'
+import JoinGame from '../views/JoinGame'
 
 Vue.use(VueRouter)
 
@@ -17,6 +18,11 @@ const routes = [
     // this generates a separate chunk (about.[hash].js) for this route
     // which is lazy-loaded when the route is visited.
     component: () => import(/* webpackChunkName: "createSession" */ '../views/CreateSession.vue')
+  },
+  {
+    path: '/join',
+    name: 'JoinGame',
+    component: JoinGame
   }
 ]
 

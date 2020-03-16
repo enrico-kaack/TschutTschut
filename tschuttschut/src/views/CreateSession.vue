@@ -17,6 +17,9 @@ export default {
       return this.$store.getters.masterUrl;
     }
   },
+  created: function() {
+    this.$store.commit("makeMeAdmin");
+  },
   methods: {
     copyToClipboard: function() {
       const el = document.createElement("textarea");
