@@ -2,7 +2,7 @@
   <v-container class="home">
     <h1>Tschut Tschut</h1>
     <div>To start a new game, press the button below. To join an existing game, visit the url the host shared with you.</div>
-    <router-link to="CreateSession">
+    <router-link to="/create">
       <v-btn>Start Game</v-btn>
     </router-link>
   </v-container>
